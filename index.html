@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stock Price Prediction</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            padding: 20px;
+        }
+        form {
+            margin-bottom: 20px;
+        }
+        #result {
+            font-weight: bold;
+        }
+        .error {
+            color: red;
+            font-weight: bold;
+        }
+        canvas {
+            max-width: 100%;
+        }
+    </style>
+</head>
+<body>
+    <h1>Stock Price Prediction</h1>
+
+    <form id="predictionForm">
+        <label for="close">Close Price:</label>
+        <input type="number" id="close" name="close" step="0.01" required>
+        <br><br>
+        <label for="volume">Volume:</label>
+        <input type="number" id="volume" name="volume" required>
+        <br><br>
+        <button type="submit">Predict</button>
+    </form>
+
+    <h2>Prediction Result</h2>
+    <p id="result">Enter the values and click Predict.</p>
+
+    <canvas id="predictionChart" width="400" height="200"></canvas>
+    <table id="historyTable" border="1" style="margin-top: 20px; width: 100%; border-collapse: collapse;">
+        <thead>
+            <tr>
+                <th>Close Price</th>
+                <th>Volume</th>
+                <th>Predicted Price</th>
+            </tr>
+        </thead>
+        <tbody>
+        </tbody>
+    </table>
+
+    <script>
+        const form = document.getElementById('predictionForm');
+        const result = document.getElementById('result');
+        const ctx = document.getElementById('predictionChart').getContext('2d');
+        const historyTableBody = document.querySelector('#historyTable tbody');
+
+        let chart;
+        let predictionHistory = [];
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const close = parseFloat(document.getElementById('close').value);
+            const volume = parseFloat(document.getElementById('volume').value);
+
+            if (isNaN(close) || isNaN(volume)) {
+                result.textContent = 'Please enter valid numerical values.';
+                result.classList.add('error');
+                return;
+            }
+
+            try {
+                const response = await fetch('/predict', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ close, volume })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    const predictedPrice = data.predicted_price.toFixed(2);
+                    result.textContent = `Predicted Price: $${predictedPrice}`;
+                    result.classList.remove('error');
+
+                    // Add to prediction history
+                    predictionHistory.push({ close, volume, predictedPrice });
+
+                    // Update table
+                    const newRow = document.createElement('tr');
+                    newRow.innerHTML = `<td>${close}</td><td>${volume}</td><td>${predictedPrice}</td>`;
+                    historyTableBody.appendChild(newRow);
+
+                    // Update chart
+                    const labels = predictionHistory.map((_, index) => `Prediction ${index + 1}`);
+                    const values = predictionHistory.map(item => item.predictedPrice);
+
+                    if (chart) chart.destroy();
+
+                    chart = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: labels,
+                            datasets: [
+                                {
+                                    label: 'Predicted Prices',
+                                    data: values,
+                                    backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                                    borderColor: 'rgba(75, 192, 192, 1)',
+                                    borderWidth: 2
+                                }
+                            ]
+                        },
+                        options: {
+                            responsive: true,
+                            scales: {
+                                y: {
+                                    beginAtZero: true
+                                }
+                            },
+                            plugins: {
+                                tooltip: {
+                                    callbacks: {
+                                        label: function(tooltipItem) {
+                                            return `$${tooltipItem.raw}`;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    });
+                } else {
+                    result.textContent = data.error || 'An error occurred while making the prediction.';
+                    result.classList.add('error');
+                }
+            } catch (error) {
+                result.textContent = 'An error occurred while connecting to the server.';
+                result.classList.add('error');
+                console.error('Fetch error:', error);
+            }
+        });
+    </script>
+</body>
+</html>
